@@ -75,6 +75,10 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
         return_diff_var = torch.var(valid_returns - valid_values)
         return_var = torch.var(valid_returns)
 
+    if "depth" in batch.batch.keys() and "width" in batch.batch.keys():
+        depth = batch.batch["depth"]
+        width = batch.batch["width"]
+
     metrics = {
         # score
         "critic/score/mean": torch.mean(sequence_score).detach().item(),
@@ -116,6 +120,21 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
         "prompt_length/max": torch.max(prompt_length).detach().item(),
         "prompt_length/min": torch.min(prompt_length).detach().item(),
         "prompt_length/clip_ratio": torch.mean(torch.eq(prompt_length, max_prompt_length).float()).detach().item(),
+        # reward function metrics
+        **(
+            {
+                "reward_fn/depth/mean": torch.mean(depth).detach().item(),
+                "reward_fn/depth/max": torch.max(depth).detach().item(),
+                "reward_fn/depth/min": torch.min(depth).detach().item(),
+                "reward_fn/depth/std": torch.std(depth).detach().item(),
+                "reward_fn/width/mean": torch.mean(width).detach().item(),
+                "reward_fn/width/max": torch.max(width).detach().item(),
+                "reward_fn/width/min": torch.min(width).detach().item(),
+                "reward_fn/width/std": torch.std(width).detach().item(),
+            }
+            if "depth" in batch.batch.keys() and "width" in batch.batch.keys()
+            else {}
+        )
     }
     return metrics
 
