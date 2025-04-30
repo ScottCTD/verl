@@ -672,6 +672,8 @@ class RayPPOTrainer:
                 config=self.config.actor_rollout_ref,
                 role="actor_rollout",
             )
+            # Add log_to_driver option specifically for the actor_rollout worker
+            actor_rollout_cls.update_options({"log_to_driver": True})
             self.resource_pool_to_cls[resource_pool]["actor_rollout"] = actor_rollout_cls
         else:
             raise NotImplementedError

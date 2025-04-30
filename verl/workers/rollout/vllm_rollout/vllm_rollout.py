@@ -39,8 +39,9 @@ from torch import nn
 from vllm import SamplingParams
 
 from verl import DataProto
-from verl.third_party.vllm import LLM, vllm_version
+from verl.third_party.vllm import LLM
 from verl.third_party.vllm import parallel_state as vllm_ps
+from verl.third_party.vllm import vllm_version
 from verl.utils.debug import GPUMemoryLogger
 from verl.utils.torch_functional import get_response_mask, pad_sequence_to_length
 from verl.workers.rollout.base import BaseRollout

@@ -15,6 +15,7 @@
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other main.
 """
 
+import logging
 import os
 
 import hydra
@@ -22,6 +23,7 @@ import ray
 
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 
+logging.getLogger("vllm.engine.llm_engine").setLevel(logging.INFO)
 
 def get_custom_reward_fn(config):
     import importlib.util
@@ -114,7 +116,10 @@ class TaskRunner:
         elif config.actor_rollout_ref.actor.strategy == "megatron":
             assert config.actor_rollout_ref.actor.strategy == config.critic.strategy
             from verl.single_controller.ray.megatron import NVMegatronRayWorkerGroup
-            from verl.workers.megatron_workers import ActorRolloutRefWorker, CriticWorker
+            from verl.workers.megatron_workers import (
+                ActorRolloutRefWorker,
+                CriticWorker,
+            )
 
             ray_worker_group_cls = NVMegatronRayWorkerGroup
 
