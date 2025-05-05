@@ -99,7 +99,9 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
                 "critic/values/max": torch.max(valid_values).detach().item(),
                 "critic/values/min": torch.min(valid_values).detach().item(),
                 # vf explained var
-                "critic/vf_explained_var": (1.0 - return_diff_var / (return_var + 1e-5)).detach().item(),
+                "critic/vf_explained_var": (1.0 - return_diff_var / (return_var + 1e-5))
+                .detach()
+                .item(),
             }
             if use_critic
             else {}
@@ -113,12 +115,30 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
         "prompt_length/mean": torch.mean(prompt_length).detach().item(),
         "prompt_length/max": torch.max(prompt_length).detach().item(),
         "prompt_length/min": torch.min(prompt_length).detach().item(),
-        "prompt_length/clip_ratio": torch.mean(torch.eq(prompt_length, max_prompt_length).float()).detach().item(),
+        "prompt_length/clip_ratio": torch.mean(
+            torch.eq(prompt_length, max_prompt_length).float()
+        )
+        .detach()
+        .item(),
+        # reward function metrics
+        **{
+            f"{k}/{stat}": fn(v)
+            for k, v in batch.non_tensor_batch.items()
+            if k.startswith("reward_fn")
+            for stat, fn in [
+                ("mean", np.mean),
+                ("std", np.std),
+                ("max", np.max),
+                ("min", np.min),
+            ]
+        },
     }
     return metrics
 
 
-def compute_timing_metrics(batch: DataProto, timing_raw: Dict[str, float]) -> Dict[str, Any]:
+def compute_timing_metrics(
+    batch: DataProto, timing_raw: Dict[str, float]
+) -> Dict[str, Any]:
     response_info = _compute_response_info(batch)
     num_prompt_tokens = torch.sum(response_info["prompt_length"]).item()
     num_response_tokens = torch.sum(response_info["response_length"]).item()
@@ -126,7 +146,10 @@ def compute_timing_metrics(batch: DataProto, timing_raw: Dict[str, float]) -> Di
 
     num_tokens_of_section = {
         "gen": num_response_tokens,
-        **{name: num_overall_tokens for name in ["ref", "values", "adv", "update_critic", "update_actor"]},
+        **{
+            name: num_overall_tokens
+            for name in ["ref", "values", "adv", "update_critic", "update_actor"]
+        },
     }
 
     return {
@@ -135,7 +158,9 @@ def compute_timing_metrics(batch: DataProto, timing_raw: Dict[str, float]) -> Di
     }
 
 
-def compute_throughout_metrics(batch: DataProto, timing_raw: Dict[str, float], n_gpus: int) -> Dict[str, Any]:
+def compute_throughout_metrics(
+    batch: DataProto, timing_raw: Dict[str, float], n_gpus: int
+) -> Dict[str, Any]:
     total_num_tokens = sum(batch.meta_info["global_token_num"])
     time = timing_raw["step"]
     # estimated_flops, promised_flops = flops_function.estimate_flops(num_tokens, time)
@@ -194,7 +219,9 @@ def process_validation_metrics(data_sources: list[str], sample_inputs: list[str]
         dict[str, dict[str, dict[str, float]]]: data source -> variable name -> metric value
     """
     # Group metrics by data source, prompt and variable
-    data_src2prompt2var2vals = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    data_src2prompt2var2vals = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(list))
+    )
     for sample_idx, data_source in enumerate(data_sources):
         prompt = sample_inputs[sample_idx]
         var2vals = data_src2prompt2var2vals[data_source][prompt]
@@ -202,7 +229,9 @@ def process_validation_metrics(data_sources: list[str], sample_inputs: list[str]
             var2vals[var_name].append(var_vals[sample_idx])
 
     # Calculate metrics for each group
-    data_src2prompt2var2metric = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    data_src2prompt2var2metric = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(dict))
+    )
     for data_source, prompt2var2vals in data_src2prompt2var2vals.items():
         for prompt, var2vals in prompt2var2vals.items():
             for var_name, var_vals in var2vals.items():
@@ -240,17 +269,25 @@ def process_validation_metrics(data_sources: list[str], sample_inputs: list[str]
                 data_src2prompt2var2metric[data_source][prompt][var_name] = metric
 
     # Aggregate metrics across prompts
-    data_src2var2metric2prompt_vals = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    data_src2var2metric2prompt_vals = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(list))
+    )
     for data_source, prompt2var2metric in data_src2prompt2var2metric.items():
         for prompt, var2metric in prompt2var2metric.items():
             for var_name, metric in var2metric.items():
                 for metric_name, metric_val in metric.items():
-                    data_src2var2metric2prompt_vals[data_source][var_name][metric_name].append(metric_val)
+                    data_src2var2metric2prompt_vals[data_source][var_name][
+                        metric_name
+                    ].append(metric_val)
 
-    data_src2var2metric2val = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+    data_src2var2metric2val = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(float))
+    )
     for data_source, var2metric2prompt_vals in data_src2var2metric2prompt_vals.items():
         for var_name, metric2prompt_vals in var2metric2prompt_vals.items():
             for metric_name, prompt_vals in metric2prompt_vals.items():
-                data_src2var2metric2val[data_source][var_name][metric_name] = np.mean(prompt_vals)
+                data_src2var2metric2val[data_source][var_name][metric_name] = np.mean(
+                    prompt_vals
+                )
 
     return data_src2var2metric2val
