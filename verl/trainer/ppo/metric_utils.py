@@ -75,10 +75,6 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
         return_diff_var = torch.var(valid_returns - valid_values)
         return_var = torch.var(valid_returns)
 
-    if "depth" in batch.batch.keys() and "width" in batch.batch.keys():
-        depth = batch.batch["depth"]
-        width = batch.batch["width"]
-
     metrics = {
         # score
         "critic/score/mean": torch.mean(sequence_score).detach().item(),
