@@ -180,10 +180,10 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
             for k, v in batch.non_tensor_batch.items()
             if k.startswith("reward_fn")
             for stat, fn in [
-                ("mean", np.mean),
-                ("std", np.std),
-                ("max", np.max),
-                ("min", np.min),
+                ("mean", np.nanmean),
+                ("std", np.nanstd),
+                ("max", np.nanmax),
+                ("min", np.nanmin),
             ]
         },
     }
