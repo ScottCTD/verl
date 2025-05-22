@@ -90,6 +90,8 @@ class AdvantageEstimator(str, Enum):
     REMAX = "remax"
     RLOO = "rloo"
 
+    LLMST = "llmst"
+
 
 @dataclass
 class ResourcePoolManager:
@@ -246,6 +248,17 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
             token_level_rewards=data.batch["token_level_rewards"],
             response_mask=data.batch["response_mask"],
             index=data.non_tensor_batch["uid"],
+        )
+        data.batch["advantages"] = advantages
+        data.batch["returns"] = returns
+    elif adv_estimator == AdvantageEstimator.LLMST:
+        # TODO: implement advantage mask
+        advantages, returns = core_algos.compute_llmst_advantages(
+            token_level_rewards=data.batch["token_level_rewards"],
+            response_mask=data.batch["response_mask"],
+            index=data.non_tensor_batch["uid"],
+            advantage_mask=None,
+            norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
@@ -1011,15 +1024,6 @@ class RayPPOTrainer:
                             multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
                         )
                         # batch["advantages"].shape = (B * N, max_response_len)
-                        
-                        if self.config.algorithm.get("use_adv_mask", False):
-                            # re-distribute advantages to useful tokens
-                            num_useful_tokens = torch.sum(advantage_mask, dim=-1, keepdim=True)
-                            weights = torch.where(num_useful_tokens > 0, 
-                                                advantage_mask * (advantage_mask.shape[1] / num_useful_tokens),
-                                                torch.ones_like(advantage_mask)
-                                                )
-                            batch.batch["advantages"] = batch.batch["advantages"] * weights
 
                     # update critic
                     if self.use_critic:

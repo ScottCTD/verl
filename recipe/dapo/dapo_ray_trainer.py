@@ -33,7 +33,7 @@ from verl.trainer.ppo.metric_utils import (
     reduce_metrics,
 )
 from verl.trainer.ppo.ray_trainer import AdvantageEstimator, RayPPOTrainer, _timer, apply_kl_penalty, compute_advantage
-
+from verl.trainer.ppo.core_algos import agg_loss
 
 class RayDAPOTrainer(RayPPOTrainer):
     """
@@ -220,6 +220,15 @@ class RayDAPOTrainer(RayPPOTrainer):
                     # recompute old_log_probs
                     with _timer("old_log_prob", timing_raw):
                         old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
+
+                        entropys = old_log_prob.batch["entropys"]
+                        response_masks = batch.batch["response_mask"]
+                        loss_agg_mode = self.config.actor_rollout_ref.actor.loss_agg_mode
+                        entropy_loss = agg_loss(loss_mat=entropys, loss_mask=response_masks, loss_agg_mode=loss_agg_mode)
+                        old_log_prob_metrics = {"actor/entropy_loss": entropy_loss.detach().item()}
+                        metrics.update(old_log_prob_metrics)
+                        old_log_prob.batch.pop("entropys")
+
                         batch = batch.union(old_log_prob)
 
                     if self.use_reference_policy:
