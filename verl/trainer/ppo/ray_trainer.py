@@ -1266,13 +1266,14 @@ class RayPPOTrainer:
                         )
                         # batch["advantages"].shape = (B * N, max_response_len)
                         
-                        # re-distribute advantages to useful tokens
-                        num_useful_tokens = torch.sum(advantage_mask, dim=-1, keepdim=True)
-                        weights = torch.where(num_useful_tokens > 0, 
-                                              advantage_mask * (advantage_mask.shape[1] / num_useful_tokens),
-                                              torch.ones_like(advantage_mask)
-                                              )
-                        batch.batch["advantages"] = batch.batch["advantages"] * weights
+                        if self.config.algorithm.get("use_adv_mask", False):
+                            # re-distribute advantages to useful tokens
+                            num_useful_tokens = torch.sum(advantage_mask, dim=-1, keepdim=True)
+                            weights = torch.where(num_useful_tokens > 0, 
+                                                advantage_mask * (advantage_mask.shape[1] / num_useful_tokens),
+                                                torch.ones_like(advantage_mask)
+                                                )
+                            batch.batch["advantages"] = batch.batch["advantages"] * weights
 
                     # update critic
                     if self.use_critic:
