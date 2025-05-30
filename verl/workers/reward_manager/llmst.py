@@ -129,7 +129,8 @@ class LLMSTRewardManager:
                             padded[:n] = value[:n]
                             advantage_mask[i, :] = padded
                     else:
-                        key = f"reward_fn/{key}"
+                        if key not in ["score", "acc"]:
+                            key = f"reward_fn/{key}"
                         reward_extra_info[key].append(value)
             else:
                 reward = score
