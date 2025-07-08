@@ -41,7 +41,7 @@ from verl.trainer.ppo.ray_trainer import (
     compute_response_mask,
 )
 from verl.utils.profiler import marked_timer
-
+from verl.trainer.ppo.core_algos import agg_loss
 
 class RayDAPOTrainer(RayPPOTrainer):
     """

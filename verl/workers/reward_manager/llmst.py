@@ -17,29 +17,17 @@ from collections import defaultdict
 import torch
 
 from verl import DataProto
-from verl.utils.reward_score import default_compute_score
-from verl.workers.reward_manager import register
+from verl.utils.reward_score import _default_compute_score
 
 
-@register("naive")
-class NaiveRewardManager:
+class LLMSTManager:
     """The reward manager."""
 
     def __init__(self, tokenizer, num_examine, compute_score=None, reward_fn_key="data_source") -> None:
-        """
-        Initialize the NaiveRewardManager instance.
-
-        Args:
-            tokenizer: The tokenizer used to decode token IDs into text.
-            num_examine: The number of batches of decoded responses to print to the console for debugging purpose.
-            compute_score: A function to compute the reward score. If None, `default_compute_score` will be used.
-            reward_fn_key: The key used to access the data source in the non-tensor batch data. Defaults to
-                "data_source".
-        """
-        self.tokenizer = tokenizer  # Store the tokenizer for decoding token IDs
+        self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
-        self.compute_score = compute_score or default_compute_score
-        self.reward_fn_key = reward_fn_key  # Store the key for accessing the data source
+        self.compute_score = compute_score or _default_compute_score
+        self.reward_fn_key = reward_fn_key
 
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
@@ -53,20 +41,24 @@ class NaiveRewardManager:
 
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
+        
+        advantage_mask = torch.zeros_like(data.batch["responses"], dtype=torch.float32)  # (B * N, max_response_len)
+        max_len = advantage_mask.shape[1]
 
         already_print_data_sources = {}
 
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
 
-            prompt_ids = data_item.batch["prompts"]
+            prompt_ids = data_item.batch["prompts"]  # data.max_prompt_length
 
             prompt_length = prompt_ids.shape[-1]
 
+            # attention_mask is a list of 0 and 1
             valid_prompt_length = data_item.batch["attention_mask"][:prompt_length].sum()
             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
 
-            response_ids = data_item.batch["responses"]
+            response_ids = data_item.batch["responses"]  # data.max_response_length
             valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
 
@@ -75,11 +67,16 @@ class NaiveRewardManager:
             response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
 
             ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
+
             data_source = data_item.non_tensor_batch[self.reward_fn_key]
-            extra_info = data_item.non_tensor_batch.get("extra_info", {})
-            num_turns = data_item.non_tensor_batch.get("__num_turns__", None)
-            extra_info["num_turns"] = num_turns
-            extra_info["response_len"] = valid_response_length
+
+            extra_info = data_item.non_tensor_batch.get("extra_info", None)
+            if extra_info is None:
+                extra_info = {
+                    "response_len": valid_response_length,
+                }
+            else:
+                extra_info["response_len"] = valid_response_length
 
             score = self.compute_score(
                 data_source=data_source,
@@ -92,7 +89,16 @@ class NaiveRewardManager:
                 reward = score["score"]
                 # Store the information including original reward
                 for key, value in score.items():
-                    reward_extra_info[key].append(value)
+                    if key == "advantage_mask":
+                        if value is not None:
+                            padded = torch.zeros_like(data_item.batch["responses"], dtype=torch.float32)
+                            value = torch.tensor(value, dtype=torch.float32, device=advantage_mask.device)
+                            n = min(value.size(0), max_len)
+                            padded[:n] = value[:n]
+                            advantage_mask[i, :] = padded
+                    else:
+                        key = f"reward_fn/{self.reward_fn_key}/{key}"
+                        reward_extra_info[key].append(value)
             else:
                 reward = score
 
@@ -116,6 +122,7 @@ class NaiveRewardManager:
             return {
                 "reward_tensor": reward_tensor,
                 "reward_extra_info": reward_extra_info,
+                "advantage_mask": advantage_mask,
             }
         else:
-            return reward_tensor
+            return reward_tensor, advantage_mask
