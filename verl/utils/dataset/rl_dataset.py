@@ -107,6 +107,7 @@ class RLHFDataset(Dataset):
         self.return_full_prompt = config.get("return_full_prompt", False)
         self.truncation = config.get("truncation", "error")
         self.filter_overlong_prompts = config.get("filter_overlong_prompts", True)
+        self.enable_thinking = config.get("enable_thinking", True)
 
         self.num_workers = config.get("filter_overlong_prompts_workers", max(1, os.cpu_count() // 4))
         self.num_workers = min(self.num_workers, os.cpu_count())
@@ -216,10 +217,14 @@ class RLHFDataset(Dataset):
         messages = self._build_messages(row_dict)
         model_inputs = {}
 
+        kwargs = {}
+        if not self.enable_thinking:
+            kwargs["enable_thinking"] = False
+
         if self.processor is not None:
             from verl.utils.dataset.vision_utils import process_image, process_video
 
-            raw_prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, enable_thinking=True)
+            raw_prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, **kwargs)
             multi_modal_data = {}
 
             images = None
@@ -258,7 +263,7 @@ class RLHFDataset(Dataset):
                 row_dict["multi_modal_inputs"].pop("second_per_grid_ts", None)
 
         else:
-            raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, enable_thinking=True)
+            raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, **kwargs)
             model_inputs = self.tokenizer(raw_prompt, return_tensors="pt", add_special_tokens=False)
             input_ids = model_inputs.pop("input_ids")
             attention_mask = model_inputs.pop("attention_mask")

@@ -43,6 +43,7 @@ data:
 
   # Maximum response length. Rollout in RL algorithms (e.g. PPO) generates up to this length.
   max_response_length: 512
+  enable_thinking: True
 
   # Batch size sampled for one training iteration of different RL algorithms.
   train_batch_size: 1024
