@@ -79,6 +79,7 @@ class NaiveRewardManager:
             extra_info = data_item.non_tensor_batch.get("extra_info", {})
             num_turns = data_item.non_tensor_batch.get("__num_turns__", None)
             extra_info["num_turns"] = num_turns
+            extra_info["response_len"] = valid_response_length
 
             score = self.compute_score(
                 data_source=data_source,
@@ -91,6 +92,7 @@ class NaiveRewardManager:
                 reward = score["score"]
                 # Store the information including original reward
                 for key, value in score.items():
+                    key = f"reward_fn/{self.reward_fn_key}/{key}"
                     reward_extra_info[key].append(value)
             else:
                 reward = score
