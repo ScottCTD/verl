@@ -300,31 +300,6 @@ def compute_llmst_advantages(
     return advantages, returns
 
 
-def compute_llmst_advantages(
-    token_level_rewards: torch.Tensor,
-    response_mask: torch.Tensor,
-    index: np.ndarray,
-    advantage_mask: torch.Tensor,
-    epsilon: float = 1e-6,
-    norm_adv_by_std_in_grpo: str = True,
-):
-    advantages, returns = compute_grpo_outcome_advantage(
-        token_level_rewards=token_level_rewards,
-        response_mask=response_mask,
-        index=index,
-        epsilon=epsilon,
-        norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
-    )
-    # re-distribute advantages to useful tokens
-    num_useful_tokens = torch.sum(advantage_mask, dim=-1, keepdim=True)
-    weights = torch.where(num_useful_tokens > 0, 
-                        advantage_mask * (advantage_mask.shape[1] / num_useful_tokens),
-                        torch.ones_like(advantage_mask)
-                        )
-    advantages = advantages * weights
-    return advantages, returns
-
-
 @register_adv_est(AdvantageEstimator.GRPO_PASSK)  # or simply: @register_adv_est("grpo_passk")
 def compute_grpo_passk_outcome_advantage(
     token_level_rewards: torch.Tensor,
