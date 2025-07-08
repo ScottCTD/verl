@@ -53,20 +53,24 @@ class NaiveRewardManager:
 
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
+        
+        advantage_mask = torch.zeros_like(data.batch["responses"], dtype=torch.float32)  # (B * N, max_response_len)
+        max_len = advantage_mask.shape[1]
 
         already_print_data_sources = {}
 
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
 
-            prompt_ids = data_item.batch["prompts"]
+            prompt_ids = data_item.batch["prompts"]  # data.max_prompt_length
 
             prompt_length = prompt_ids.shape[-1]
 
+            # attention_mask is a list of 0 and 1
             valid_prompt_length = data_item.batch["attention_mask"][:prompt_length].sum()
             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
 
-            response_ids = data_item.batch["responses"]
+            response_ids = data_item.batch["responses"]  # data.max_response_length
             valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
 
@@ -92,8 +96,16 @@ class NaiveRewardManager:
                 reward = score["score"]
                 # Store the information including original reward
                 for key, value in score.items():
-                    key = f"reward_fn/{self.reward_fn_key}/{key}"
-                    reward_extra_info[key].append(value)
+                    if key == "advantage_mask":
+                        if value is not None:
+                            padded = torch.zeros_like(data_item.batch["responses"], dtype=torch.float32)
+                            value = torch.tensor(value, dtype=torch.float32, device=advantage_mask.device)
+                            n = min(value.size(0), max_len)
+                            padded[:n] = value[:n]
+                            advantage_mask[i, :] = padded
+                    else:
+                        key = f"reward_fn/{self.reward_fn_key}/{key}"
+                        reward_extra_info[key].append(value)
             else:
                 reward = score
 
@@ -117,6 +129,7 @@ class NaiveRewardManager:
             return {
                 "reward_tensor": reward_tensor,
                 "reward_extra_info": reward_extra_info,
+                "advantage_mask": advantage_mask,
             }
         else:
-            return reward_tensor
+            return reward_tensor, advantage_mask

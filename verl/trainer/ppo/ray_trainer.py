@@ -1177,7 +1177,7 @@ class RayPPOTrainer:
                         if self.config.reward_model.launch_reward_fn_async:
                             future_reward = compute_reward_async.remote(batch, self.config, self.tokenizer)
                         else:
-                            reward_tensor, reward_extra_infos_dict = compute_reward(batch, self.reward_fn)
+                            reward_tensor, advantage_mask, reward_extra_infos_dict = compute_reward(batch, self.reward_fn)
 
                     # recompute old_log_probs
                     with marked_timer("old_log_prob", timing_raw, color="blue"):
@@ -1234,7 +1234,7 @@ class RayPPOTrainer:
                         # we combine with rule-based rm
                         reward_extra_infos_dict: dict[str, list]
                         if self.config.reward_model.launch_reward_fn_async:
-                            reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
+                            reward_tensor, advantage_mask, reward_extra_infos_dict = ray.get(future_reward)
                         batch.batch["token_level_scores"] = reward_tensor
 
                         if reward_extra_infos_dict:
@@ -1264,6 +1264,15 @@ class RayPPOTrainer:
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
                             config=self.config.algorithm,
                         )
+                        # batch["advantages"].shape = (B * N, max_response_len)
+                        
+                        # re-distribute advantages to useful tokens
+                        num_useful_tokens = torch.sum(advantage_mask, dim=-1, keepdim=True)
+                        weights = torch.where(num_useful_tokens > 0, 
+                                              advantage_mask * (advantage_mask.shape[1] / num_useful_tokens),
+                                              torch.ones_like(advantage_mask)
+                                              )
+                        batch.batch["advantages"] = batch.batch["advantages"] * weights
 
                     # update critic
                     if self.use_critic:
