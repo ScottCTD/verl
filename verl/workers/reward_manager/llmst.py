@@ -20,7 +20,7 @@ from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
 
 
-class LLMSTManager:
+class LLMSTRewardManager:
     """The reward manager."""
 
     def __init__(
@@ -56,7 +56,7 @@ class LLMSTManager:
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
 
-        advantage_mask = torch.zeros_like(
+        advantage_mask = torch.ones_like(
             data.batch["responses"], dtype=torch.float32
         )  # (B * N, max_response_len)
         max_len = advantage_mask.shape[1]
@@ -118,6 +118,7 @@ class LLMSTManager:
                 for key, value in score.items():
                     if key == "advantage_mask":
                         if value is not None:
+                            # TODO: align advantage mask (on character space) to token space
                             padded = torch.zeros_like(
                                 data_item.batch["responses"], dtype=torch.float32
                             )
@@ -128,7 +129,7 @@ class LLMSTManager:
                             padded[:n] = value[:n]
                             advantage_mask[i, :] = padded
                     else:
-                        key = f"reward_fn/{self.reward_fn_key}/{key}"
+                        key = f"reward_fn/{key}"
                         reward_extra_info[key].append(value)
             else:
                 reward = score
