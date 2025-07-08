@@ -23,11 +23,25 @@ from verl.utils.reward_score import _default_compute_score
 class LLMSTManager:
     """The reward manager."""
 
-    def __init__(self, tokenizer, num_examine, compute_score=None, reward_fn_key="data_source") -> None:
+    def __init__(
+        self,
+        tokenizer,
+        num_examine,
+        compute_score=None,
+        reward_fn_key="data_source",
+        max_resp_len=None,
+        overlong_buffer_cfg=None,
+    ) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or _default_compute_score
         self.reward_fn_key = reward_fn_key
+        self.overlong_buffer_cfg = overlong_buffer_cfg
+        self.max_resp_len = max_resp_len
+
+        if self.overlong_buffer_cfg is not None:
+            assert self.max_resp_len is not None, f"max_resp_len must be provided if {overlong_buffer_cfg=}, but got None"
+
 
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
@@ -41,8 +55,10 @@ class LLMSTManager:
 
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
-        
-        advantage_mask = torch.zeros_like(data.batch["responses"], dtype=torch.float32)  # (B * N, max_response_len)
+
+        advantage_mask = torch.zeros_like(
+            data.batch["responses"], dtype=torch.float32
+        )  # (B * N, max_response_len)
         max_len = advantage_mask.shape[1]
 
         already_print_data_sources = {}
@@ -55,16 +71,27 @@ class LLMSTManager:
             prompt_length = prompt_ids.shape[-1]
 
             # attention_mask is a list of 0 and 1
-            valid_prompt_length = data_item.batch["attention_mask"][:prompt_length].sum()
+            valid_prompt_length = data_item.batch["attention_mask"][
+                :prompt_length
+            ].sum()
             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
 
             response_ids = data_item.batch["responses"]  # data.max_response_length
-            valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
+            valid_response_length = data_item.batch["attention_mask"][
+                prompt_length:
+            ].sum()
             valid_response_ids = response_ids[:valid_response_length]
 
             # decode
-            prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
-            response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
+            prompt_str = self.tokenizer.decode(
+                valid_prompt_ids, skip_special_tokens=True
+            )
+            response_str = self.tokenizer.decode(
+                valid_response_ids, skip_special_tokens=True
+            )
+            eos_token = self.tokenizer.eos_token
+            if response_str.endswith(eos_token):
+                response_str = response_str[: -len(eos_token)]
 
             ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
 
@@ -91,8 +118,12 @@ class LLMSTManager:
                 for key, value in score.items():
                     if key == "advantage_mask":
                         if value is not None:
-                            padded = torch.zeros_like(data_item.batch["responses"], dtype=torch.float32)
-                            value = torch.tensor(value, dtype=torch.float32, device=advantage_mask.device)
+                            padded = torch.zeros_like(
+                                data_item.batch["responses"], dtype=torch.float32
+                            )
+                            value = torch.tensor(
+                                value, dtype=torch.float32, device=advantage_mask.device
+                            )
                             n = min(value.size(0), max_len)
                             padded[:n] = value[:n]
                             advantage_mask[i, :] = padded
@@ -102,7 +133,20 @@ class LLMSTManager:
             else:
                 reward = score
 
+            if self.overlong_buffer_cfg.enable:
+                overlong_buffer_len = self.overlong_buffer_cfg.len
+                expected_len = self.max_resp_len - overlong_buffer_len
+                exceed_len = valid_response_length - expected_len
+                overlong_penalty_factor = self.overlong_buffer_cfg.penalty_factor
+                overlong_reward = min(-exceed_len / overlong_buffer_len * overlong_penalty_factor, 0)
+                reward += overlong_reward
+                if self.overlong_buffer_cfg.log:
+                    reward_extra_info["overlong_reward"].append(overlong_reward)
+                    reward_extra_info["overlong"].append(overlong_reward < 0)
+
             reward_tensor[i, valid_response_length - 1] = reward
+
+            data.batch["advantage_mask"] = advantage_mask
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
@@ -122,7 +166,6 @@ class LLMSTManager:
             return {
                 "reward_tensor": reward_tensor,
                 "reward_extra_info": reward_extra_info,
-                "advantage_mask": advantage_mask,
             }
         else:
-            return reward_tensor, advantage_mask
+            return reward_tensor

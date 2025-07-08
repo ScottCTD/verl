@@ -283,6 +283,11 @@ def compute_llmst_advantages(
     epsilon: float = 1e-6,
     norm_adv_by_std_in_grpo: str = True,
 ):
+    """
+    Same as GRPO, but with an additional advantage mask.
+    The advantage mask is used to indicate which tokens are useful for computing the advantage.
+    It's a strategy to credit assignment.
+    """
     advantages, returns = compute_grpo_outcome_advantage(
         token_level_rewards=token_level_rewards,
         response_mask=response_mask,
@@ -290,13 +295,7 @@ def compute_llmst_advantages(
         epsilon=epsilon,
         norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
     )
-    # re-distribute advantages to useful tokens
-    num_useful_tokens = torch.sum(advantage_mask, dim=-1, keepdim=True)
-    weights = torch.where(num_useful_tokens > 0, 
-                        advantage_mask * (advantage_mask.shape[1] / num_useful_tokens),
-                        torch.ones_like(advantage_mask)
-                        )
-    advantages = advantages * weights
+    advantages = advantages * advantage_mask
     return advantages, returns
 
 
