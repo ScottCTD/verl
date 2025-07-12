@@ -103,6 +103,8 @@ class DAPORewardManager:
                 score = result["score"]
                 # Store the information including original reward
                 for key, value in result.items():
+                    if key not in ["score", "acc"]:
+                        key = f"reward_fn/{key}"
                     reward_extra_info[key].append(value)
             else:
                 score = result
