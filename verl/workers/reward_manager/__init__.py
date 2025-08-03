@@ -17,6 +17,8 @@ from .batch import BatchRewardManager
 from .dapo import DAPORewardManager
 from .naive import NaiveRewardManager
 from .prime import PrimeRewardManager
+from .rule_process import RuleProcessRewardManager
+
 
 # Note(haibin.lin): no need to include all reward managers here in case of complicated dependencies
 __all__ = [
