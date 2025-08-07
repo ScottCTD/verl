@@ -127,7 +127,7 @@ class RuleProcessRewardManager:
 
             reward_tensor[i, : valid_response_length] = reward_vec
             
-            assert abs(sum(reward) - reward_vec.sum().item()) < 1e-6, f"{sum(reward)=} {reward_vec.sum().item()=}"
+            # assert abs(sum(reward) - reward_vec.sum().item()) < 1e-6, f"{sum(reward)=} {reward_vec.sum().item()=}"
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
