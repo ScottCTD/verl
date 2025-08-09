@@ -168,6 +168,14 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
         "prompt_length/max": torch.max(prompt_length).detach().item(),
         "prompt_length/min": torch.min(prompt_length).detach().item(),
         "prompt_length/clip_ratio": torch.mean(torch.eq(prompt_length, max_prompt_length).float()).detach().item(),
+        # reward fn metrics
+        **(
+            {
+                f"reward_fn/{key}_{agg}": fn(value) for key, value in batch.non_tensor_batch.items()
+                if key.startswith("reward_fn/")
+                for agg, fn in [("mean", np.nanmean), ("max", np.nanmax), ("min", np.nanmin)]
+            }
+        )
     }
 
     # multi-turn conversation

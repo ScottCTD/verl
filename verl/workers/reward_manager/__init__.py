@@ -26,6 +26,7 @@ __all__ = [
     "DAPORewardManager",
     "NaiveRewardManager",
     "PrimeRewardManager",
+    "RuleProcessRewardManager",
     "register",
     "get_reward_manager_cls",
 ]
