@@ -88,6 +88,10 @@ engine_kwargs:
     # Whether to disable the preprocessor cache for multimodel models.
     disable_mm_preprocessor_cache: False
 
+    # Whether to enable prefix caching.
+    # TODO: Inevestigate: this might generate corrupted outputs when True.
+    enable_prefix_caching: True
+
   # for sglang
   sglang:
 
